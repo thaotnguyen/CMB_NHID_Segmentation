@@ -158,7 +158,7 @@ class Multiclass_DataGen_2D_Reader_vDec2020(keras.utils.Sequence):
         w[w == 0] = (pos+neg)/(2*neg)
         w[w == 1] = (pos+neg)/(2*pos)
 
-        return X, y, np.squeeze(w)
+        return X, y#, np.squeeze(w)
 
 
     def __augment_slice(self, slice, translate_axis, degree, slice_centroid, flipX, flipY, is_gt=False):
