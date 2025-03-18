@@ -1,6 +1,4 @@
-
-
-
+import datetime
 from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 import sklearn
@@ -11,7 +9,7 @@ import tensorflow as tf
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 sess = tf.compat.v1.Session(config = config)
-tf.compat.v1.disable_eager_execution()
+# tf.compat.v1.disable_eager_execution()
 
 from tensorflow.keras import layers
 from tensorflow.keras import activations
@@ -21,6 +19,8 @@ from tensorflow.keras import metrics
 from tensorflow.keras import optimizers
 from tensorflow import keras
 from tensorflow.keras import backend as K
+from tensorflow.keras.mixed_precision import set_global_policy
+set_global_policy('mixed_float16')
 
 import traceback
 import configparser
@@ -192,7 +192,7 @@ class AUC(tf.keras.metrics.AUC):
         else:
             super(AUC, self).update_state(y_true, y_pred, sample_weight)
 
-def train_model(list_of_training_ids, write_path, root_output_path, output_subfolder, model_name = "DL_model", data_channels = 2, outputclasses = 2, slice_dim = (256, 256, 256), train_batch_size = 16, model_loss = 'binary_crossentropy', train_epochs = 50, in_memory_augment = False, no_rotations = 0, no_translations_axis1 = 0, no_translations_axis2 = 0, shuffle = True):
+def train_model(list_of_training_ids, write_path, root_output_path, output_subfolder, model_name = "DL_model", data_channels = 2, outputclasses = 2, slice_dim = (256, 256, 256), train_batch_size = 24, model_loss = 'binary_crossentropy', train_epochs = 50, in_memory_augment = False, no_rotations = 0, no_translations_axis1 = 0, no_translations_axis2 = 0, shuffle = True):
 
     # Make the root output directory if it does not already exist
     if (os.path.exists(root_output_path) == False):
@@ -253,7 +253,7 @@ def train_model(list_of_training_ids, write_path, root_output_path, output_subfo
         slice_dim = slice_dim,
         n_channels = data_channels,
         n_classes = outputclasses,
-        in_memory_augment = True,
+        in_memory_augment = False,
         no_rotations = no_rotations,
         no_translations_axis1 = no_translations_axis1,
         no_translations_axis2 = no_translations_axis2,
@@ -307,7 +307,7 @@ def train_model(list_of_training_ids, write_path, root_output_path, output_subfo
 
     # reshaped_output = layers.Reshape((np.prod(slice_dim[:-1]), 1))(probability_output)
 
-    model = tf.keras.Model(inputs = [inputs], outputs = [logits])
+    model = tf.keras.Model(inputs = inputs, outputs = [logits])
     model.summary()
 
     loss_function = losses.BinaryCrossentropy(from_logits=True)
@@ -315,7 +315,9 @@ def train_model(list_of_training_ids, write_path, root_output_path, output_subfo
     model.compile(
         optimizer = 'adam',
         loss = loss_function,
-        sample_weight_mode = "temporal",
+        # sample_weight_mode = "temporal",
+        jit_compile = True,
+        auto_scale_loss = True,
         metrics = [
             MeanIoU(num_classes=2, name='binary_iou'),
             AUC(curve='PR', from_logits=True, name='auc'),
@@ -341,11 +343,34 @@ def train_model(list_of_training_ids, write_path, root_output_path, output_subfo
     cp_latest = tf.keras.callbacks.ModelCheckpoint(filepath = model_path_latest, monitor = 'val_loss', mode = 'min', save_best_only = False, verbose = 2)
     csvlogger = tf.keras.callbacks.CSVLogger(filename = os.path.join(output_dir, model_name + "_Training_Metrics.log"), separator = ";", append = True)
 
+    # New custom callback to show per-step progress.
+    class StepProgressBar(tf.keras.callbacks.Callback):
+        def __init__(self, steps_per_epoch):
+            super().__init__()
+            self.steps_per_epoch = steps_per_epoch
+
+        def on_epoch_begin(self, epoch, logs=None):
+            self.epoch_start_time = time.time()
+
+        def on_train_batch_begin(self, batch, logs=None):
+            self.batch_start_time = time.time()
+
+        def on_train_batch_end(self, batch, logs=None):
+            batch_time = time.time() - self.batch_start_time
+            elapsed_time = time.time() - self.epoch_start_time
+            steps_left = self.steps_per_epoch - (batch + 1)
+            time_remaining = steps_left * (elapsed_time/(batch + 1))
+            print(f'\rStep {batch+1}/{self.steps_per_epoch} - step time: {batch_time:.2f}s - elapsed time: {str(datetime.timedelta(seconds=elapsed_time))} - time left: {str(datetime.timedelta(seconds=time_remaining))}', end='', flush=True)
+
+        def on_epoch_end(self, epoch, logs=None):
+            elapsed = time.time() - self.epoch_start_time
+            print(f'\nEpoch {epoch+1} finished in {elapsed:.2f}s')
+    
     history = model.fit(
         train_dataset,
         epochs = train_epochs,
         validation_data = validation_dataset,
-        callbacks = [cp_best, cp_latest, csvlogger],
+        callbacks = [cp_best, cp_latest, csvlogger, StepProgressBar(len(train_dataset))],
         verbose = 2
     )
 

@@ -165,7 +165,7 @@ class Multiclass_DataGen_2D_Writer_vDec2020():
 
 
     def __slice_has_labels__(self, slice, labels):
-        slice_flattened = slice.astype(np.int).flatten().tolist()
+        slice_flattened = slice.astype(int).flatten().tolist()
         res = any(elem in labels for elem in slice_flattened)
         return res
 
@@ -186,7 +186,7 @@ class Multiclass_DataGen_2D_Writer_vDec2020():
 
         # Load all of a single subject's volumes. The first volume is CMB_Segmentation, the second is SWI, the thrid is QSM, etc
         for i in range(len(volumes_list)):
-            loaded_vols[i] = nib.load(volumes_list[i]).get_data() # Load the niftii objects into loaded_vols[i]
+            loaded_vols[i] = nib.load(volumes_list[i]).get_fdata() # Load the niftii objects into loaded_vols[i]
             base_name[i] = id + "_vol" + str(i)
 
 
@@ -260,7 +260,6 @@ class Multiclass_DataGen_2D_Writer_vDec2020():
 
         # For all axial (axis = 2) slices
         elif (self._slice_axis == 2):
-
             for i in range(loaded_vols[1].shape[self._slice_axis]):
                 swi_slice = loaded_vols[1][:, :, i] # Take the ith swi slice and check for blank
                 cmb_slice = loaded_vols[0][:, :, i] # Take the ith CMB slice and check if it contains a segmentation

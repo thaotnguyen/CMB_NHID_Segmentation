@@ -131,9 +131,15 @@ dmypy.json
 # Images
 images/
 
+# Training data
+training_data/
+
 # Configs
-Config_file*
+config_file*
 Example_config_file.ini
 Example*csv
 Fold*
 data_*.csv
+.vscode/
+Fold_*_train_test.ini
+output/
