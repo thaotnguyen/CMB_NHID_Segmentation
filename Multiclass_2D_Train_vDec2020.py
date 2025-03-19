@@ -192,7 +192,7 @@ class AUC(tf.keras.metrics.AUC):
         else:
             super(AUC, self).update_state(y_true, y_pred, sample_weight)
 
-def train_model(list_of_training_ids, write_path, root_output_path, output_subfolder, model_name = "DL_model", data_channels = 2, outputclasses = 2, slice_dim = (256, 256, 256), train_batch_size = 24, model_loss = 'binary_crossentropy', train_epochs = 50, in_memory_augment = False, no_rotations = 0, no_translations_axis1 = 0, no_translations_axis2 = 0, shuffle = True):
+def train_model(list_of_training_ids, write_path, root_output_path, output_subfolder, model_name = "DL_model", data_channels = 2, outputclasses = 2, slice_dim = (256, 256, 256), train_batch_size = 24, model_loss = 'binary_crossentropy', train_epochs = 50, in_memory_augment = False, no_rotations = 0, no_translations_axis1 = 0, no_translations_axis2 = 0, no_zoom = 0, shuffle = True):
 
     # Make the root output directory if it does not already exist
     if (os.path.exists(root_output_path) == False):
@@ -215,35 +215,36 @@ def train_model(list_of_training_ids, write_path, root_output_path, output_subfo
     # Split the list into training and validation sets.
     train_ids, validation_ids = train_test_split(list_of_training_ids, test_size = 0.20)
 
-    # # print("  Reading training dataset...")
-    # data_with_augments = Multiclass_DataGen_2D_Reader_vDec2020.Multiclass_DataGen_2D_Reader_vDec2020(
-    #     list_of_ids = train_ids,
-    #     write_path = write_path,
-    #     batch_size = train_batch_size,
-    #     slice_dim = slice_dim,
-    #     n_channels = data_channels,
-    #     n_classes = outputclasses,
-    #     in_memory_augment = True,
-    #     no_rotations = no_rotations,
-    #     no_translations_axis1 = no_translations_axis1,
-    #     no_translations_axis2 = no_translations_axis2,
-    #     shuffle = False
-    # )
+    # print("  Reading training dataset...")
+    data_with_augments = Multiclass_DataGen_2D_Reader_vDec2020.Multiclass_DataGen_2D_Reader_vDec2020(
+        list_of_ids = train_ids,
+        write_path = write_path,
+        batch_size = train_batch_size,
+        slice_dim = slice_dim,
+        n_channels = data_channels,
+        n_classes = outputclasses,
+        in_memory_augment = True,
+        no_rotations = no_rotations,
+        no_translations_axis1 = no_translations_axis1,
+        no_translations_axis2 = no_translations_axis2,
+        no_zoom = no_zoom,
+        shuffle = False
+    )
 
-    # Multiclass_2D_Utils_vDec2020.visual_check_datagen_reader(data_with_augments, 'with_augments')
+    Multiclass_2D_Utils_vDec2020.visual_check_datagen_reader(data_with_augments, 'with_augments')
 
-    # # print("  Reading training dataset...")
-    # data_without_augments = Multiclass_DataGen_2D_Reader_vDec2020.Multiclass_DataGen_2D_Reader_vDec2020(
-    #     list_of_ids = train_ids,
-    #     write_path = write_path,
-    #     batch_size = train_batch_size,
-    #     slice_dim = slice_dim,
-    #     n_channels = data_channels,
-    #     n_classes = outputclasses,
-    #     shuffle = False
-    # )
+    # print("  Reading training dataset...")
+    data_without_augments = Multiclass_DataGen_2D_Reader_vDec2020.Multiclass_DataGen_2D_Reader_vDec2020(
+        list_of_ids = train_ids,
+        write_path = write_path,
+        batch_size = train_batch_size,
+        slice_dim = slice_dim,
+        n_channels = data_channels,
+        n_classes = outputclasses,
+        shuffle = False
+    )
 
-    # Multiclass_2D_Utils_vDec2020.visual_check_datagen_reader(data_without_augments, 'without_augments')    
+    Multiclass_2D_Utils_vDec2020.visual_check_datagen_reader(data_without_augments, 'without_augments')    
 
     print("  Reading training dataset...")
     train_dataset = Multiclass_DataGen_2D_Reader_vDec2020.Multiclass_DataGen_2D_Reader_vDec2020(
@@ -253,10 +254,11 @@ def train_model(list_of_training_ids, write_path, root_output_path, output_subfo
         slice_dim = slice_dim,
         n_channels = data_channels,
         n_classes = outputclasses,
-        in_memory_augment = False,
+        in_memory_augment = True,
         no_rotations = no_rotations,
         no_translations_axis1 = no_translations_axis1,
         no_translations_axis2 = no_translations_axis2,
+        no_zoom = no_zoom,
         shuffle = shuffle
     )
 
@@ -341,42 +343,20 @@ def train_model(list_of_training_ids, write_path, root_output_path, output_subfo
     model_path_latest = os.path.join(output_dir, "latest.keras")
     cp_best = tf.keras.callbacks.ModelCheckpoint(filepath = model_path_best, monitor = 'val_loss', mode = 'min', save_best_only = True, verbose = 2)
     cp_latest = tf.keras.callbacks.ModelCheckpoint(filepath = model_path_latest, monitor = 'val_loss', mode = 'min', save_best_only = False, verbose = 2)
-    csvlogger = tf.keras.callbacks.CSVLogger(filename = os.path.join(output_dir, model_name + "_Training_Metrics.log"), separator = ";", append = True)
-
-    # New custom callback to show per-step progress.
-    class StepProgressBar(tf.keras.callbacks.Callback):
-        def __init__(self, steps_per_epoch):
-            super().__init__()
-            self.steps_per_epoch = steps_per_epoch
-
-        def on_epoch_begin(self, epoch, logs=None):
-            self.epoch_start_time = time.time()
-
-        def on_train_batch_begin(self, batch, logs=None):
-            self.batch_start_time = time.time()
-
-        def on_train_batch_end(self, batch, logs=None):
-            batch_time = time.time() - self.batch_start_time
-            elapsed_time = time.time() - self.epoch_start_time
-            steps_left = self.steps_per_epoch - (batch + 1)
-            time_remaining = steps_left * (elapsed_time/(batch + 1))
-            print(f'\rStep {batch+1}/{self.steps_per_epoch} - step time: {batch_time:.2f}s - elapsed time: {str(datetime.timedelta(seconds=elapsed_time))} - time left: {str(datetime.timedelta(seconds=time_remaining))}', end='', flush=True)
-
-        def on_epoch_end(self, epoch, logs=None):
-            elapsed = time.time() - self.epoch_start_time
-            print(f'\nEpoch {epoch+1} finished in {elapsed:.2f}s')
+    csvlogger = tf.keras.callbacks.CSVLogger(filename = os.path.join(output_dir, model_name + "_Training_Metrics.log"), separator = ";", append = False)
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir='.', histogram_freq=0)
     
     history = model.fit(
         train_dataset,
         epochs = train_epochs,
         validation_data = validation_dataset,
-        callbacks = [cp_best, cp_latest, csvlogger, StepProgressBar(len(train_dataset))],
+        callbacks = [cp_best, cp_latest, csvlogger, tensorboard_callback],
         verbose = 2
     )
 
 
-    dice = history.history['mean_iou']
-    val_dice = history.history['val_mean_iou']
+    dice = history.history['binary_iou']
+    val_dice = history.history['val_binary_iou']
 
     loss = history.history['loss']
     val_loss = history.history['val_loss']
@@ -389,16 +369,16 @@ def train_model(list_of_training_ids, write_path, root_output_path, output_subfo
         # Plot training/validation loss plots
         plt.figure(figsize = (16, 8))
         plt.subplot(1, 2, 1)
-        plt.plot(epochs_range, dice, label = 'mean_iou')
-        plt.plot(epochs_range, val_dice, label = 'val_mean_iou')
+        plt.plot(epochs_range, dice, label = 'binary_iou')
+        plt.plot(epochs_range, val_dice, label = 'val_binary_iou')
         plt.legend(loc = 'upper right')
-        plt.title('Training and Validation Mean IOU')
+        plt.title('Training and Validation Binary IOU')
 
         plt.subplot(1, 2, 2)
-        plt.plot(epochs_range, loss, label = 'dice_loss')
-        plt.plot(epochs_range, val_loss, label = 'val_dice_loss')
+        plt.plot(epochs_range, loss, label = 'loss')
+        plt.plot(epochs_range, val_loss, label = 'val_loss')
         plt.legend(loc = 'upper right')
-        plt.title('Training and Validation Mean Dice Loss')
+        plt.title('Training and Validation Binary CE Loss')
 
         plt.savefig(os.path.join(output_dir, model_name + "_Training_and_Validation_Loss.png"))
         # plt.show()
@@ -658,6 +638,7 @@ def main():
         no_rotations = int(cfg_train_params["DATA_AUGMENTATION"]["no_rotations"])
         no_tralations_axis1 = int(cfg_train_params["DATA_AUGMENTATION"]["no_translations_axis1"])
         no_tralations_axis2 = int(cfg_train_params["DATA_AUGMENTATION"]["no_translations_axis2"])
+        no_zoom = int(cfg_train_params["DATA_AUGMENTATION"]["no_zoom"])
 
         print("Model training parameters are:")
         print("  write_path=", write_path, sep = "")
@@ -677,6 +658,7 @@ def main():
         print("  no_rotations=", no_rotations, sep = "")
         print("  no_tralations_axis1=", no_tralations_axis1, sep = "")
         print("  no_tralations_axis2=", no_tralations_axis2, sep = "")
+        print("  no_zoom=", no_zoom, sep = "")
         print("")
 
 
@@ -719,6 +701,7 @@ def main():
                                          no_rotations = no_rotations,
                                          no_translations_axis1 = no_tralations_axis1,
                                          no_translations_axis2 = no_tralations_axis2,
+                                         no_zoom = no_zoom,
                                          shuffle = shuffle
             )
 

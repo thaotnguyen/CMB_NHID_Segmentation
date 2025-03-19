@@ -15,6 +15,7 @@ import tensorflow as tf
 
 from tensorflow import keras
 from skimage.exposure import rescale_intensity
+from Multiclass_2D_Utils_vDec2020 import clipped_zoom
 
 pos = 1
 neg = 10
@@ -32,6 +33,7 @@ class Multiclass_DataGen_2D_Reader_vDec2020(keras.utils.Sequence):
                  no_rotations = 0,
                  no_translations_axis1 = 0,
                  no_translations_axis2 = 0,
+                 no_zoom = 0,
                  shuffle = True,
                  ):
 
@@ -46,6 +48,7 @@ class Multiclass_DataGen_2D_Reader_vDec2020(keras.utils.Sequence):
         self._no_rotations = no_rotations
         self._no_translations_axis1 = no_translations_axis1
         self._no_translations_axis2 = no_translations_axis2
+        self._no_zoom = no_zoom
 
         self._write_path_list = list(os.path.join(write_path, subject_id) for subject_id in list_of_ids)
 
@@ -144,8 +147,17 @@ class Multiclass_DataGen_2D_Reader_vDec2020(keras.utils.Sequence):
                 if self._no_rotations != 0:
                     slice_centroid = centroid(T2)
                     degree = random.choice(np.arange(1, 179, 178./self._no_rotations))
-                flipX = random.randrange(2)
-                flipY = random.randrange(2)
+                flipX = random.randrange(-2,2)
+                flipY = random.randrange(-2,2)
+                rotate90 = random.randrange(4)
+                zoom = random.randrange(self._no_zoom)/self._no_zoom
+                zoom = 0.95 + (random.randint(0,1) * (zoom/10))
+                if rotate90 != 0:
+                    X[i] = np.rot90(X[i], k = rotate90)
+                    y[i] = np.rot90(y[i], k = rotate90)
+                if zoom != 1:
+                    X[i] = clipped_zoom(X[i], zoom)[..., None]
+                    y[i] = clipped_zoom(y[i], zoom)
                 for j in range(X.shape[3]):
                     X[i, :, :, j] = self.__augment_slice(X[i, :, :, j], translate_axis, degree, slice_centroid, flipX, flipY, is_gt = j == 0)
                 for j in range(y.shape[3]):

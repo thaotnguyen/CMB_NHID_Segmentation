@@ -1,6 +1,6 @@
 
 import numpy as np
-
+import cv2
 
 def pad_volume(vol, newshape = (256, 256, 256), slice_axis = 2):
     '''
@@ -44,6 +44,8 @@ def return_as_list_of_strings(string_data):
 
     # Then tokenize/split based on the comma
     s = s.split(",")
+    if s[0] == "" and len(s) == 1:
+        return []
 
     # Then create an empty list and the tokens to the list
     ret = list()
@@ -60,6 +62,8 @@ def return_as_list_of_ints(string_data):
 
     # Then tokenize/split based on the comma
     s = s.split(",")
+    if s[0] == "" and len(s) == 1:
+        return []
 
     # Then create an empty list and the tokens to the list
     ret = list()
@@ -76,6 +80,55 @@ def return_as_boolean(string_data):
         return True
     else:
         return False
+    
+def clipped_zoom(img, zoom_factor=0):
+
+    """
+    Center zoom in/out of the given image and returning an enlarged/shrinked view of 
+    the image without changing dimensions
+    ------
+    Args:
+        img : ndarray
+            Image array
+        zoom_factor : float
+            amount of zoom as a ratio [0 to Inf). Default 0.
+    ------
+    Returns:
+        result: ndarray
+           numpy ndarray of the same shape of the input img zoomed by the specified factor.          
+    """
+    if zoom_factor == 0:
+        return img
+
+
+    height, width = img.shape[:2] # It's also the final desired shape
+    new_height, new_width = int(height * zoom_factor), int(width * zoom_factor)
+    
+    ### Crop only the part that will remain in the result (more efficient)
+    # Centered bbox of the final desired size in resized (larger/smaller) image coordinates
+    y1, x1 = max(0, new_height - height) // 2, max(0, new_width - width) // 2
+    y2, x2 = y1 + height, x1 + width
+    bbox = np.array([y1,x1,y2,x2])
+    # Map back to original image coordinates
+    bbox = (bbox / zoom_factor).astype(int)
+    y1, x1, y2, x2 = bbox
+    cropped_img = img[y1:y2, x1:x2]
+    
+    # Handle padding when downscaling
+    resize_height, resize_width = min(new_height, height), min(new_width, width)
+    pad_height1, pad_width1 = (height - resize_height) // 2, (width - resize_width) //2
+    pad_height2, pad_width2 = (height - resize_height) - pad_height1, (width - resize_width) - pad_width1
+    
+    result = cv2.resize(cropped_img, (resize_width, resize_height))
+    
+    if len(result.shape) == 2:
+        pad_spec = [(pad_height1, pad_height2), (pad_width1, pad_width2)] * (img.ndim - 2)
+    else:
+        pad_spec = [((pad_height1, pad_height2)), (pad_width1, pad_width2), (0,0)] * (img.ndim - 2)
+    
+    result = np.pad(result, pad_spec, mode='minimum')
+    assert result.shape[0] == height and result.shape[1] == width
+    return result
 
 def visual_check_datagen_reader(reader_dataset, path):
     from matplotlib import pyplot as plt
@@ -86,19 +139,19 @@ def visual_check_datagen_reader(reader_dataset, path):
         for i in range(x.shape[0]):
             plt.figure(figsize = (16, 8))
 
-            plt.subplot(1, 2, 1)
-            plt.imshow(x[i, :, :, 0], cmap = "gray")
-            plt.imshow(np.ma.masked_where(y[i, :, :, 0] == 0, y[i, :, :, 0]), cmap="gist_rainbow", interpolation="nearest")
-            plt.title("T2")
+            # plt.subplot(1, 2, 1)
+            # plt.imshow(x[i, :, :, 0], cmap = "gray")
+            # plt.imshow(np.ma.masked_where(y[i, :, :, 0] == 0, y[i, :, :, 0]), cmap="gist_rainbow", interpolation="nearest")
+            # plt.title("T2")
 
             plt.subplot(1, 2, 2)
-            plt.imshow(x[i, :, :, 1], cmap = "gray")
+            plt.imshow(x[i, :, :, 0], cmap = "gray")
             plt.imshow(np.ma.masked_where(y[i, :, :, 0] == 0, y[i, :, :, 0]), cmap="gist_rainbow", interpolation="nearest")
             plt.title("T1")
 
             plt.suptitle("Unique values for class label 0: {}". format(np.unique(y[i, :, :, 0])))
 
             print(f'Writing images/{item}_{i}.png\r', end='')
-            plt.savefig(f'/abyssaldata/projects/ePVS/images/{path}/{item}_{i}.png')
+            plt.savefig(f'/home/ttn/Development/CMB_NHID_Segmentation/image_proofs/{path}/{item}_{i}.png')
             plt.close()
 
